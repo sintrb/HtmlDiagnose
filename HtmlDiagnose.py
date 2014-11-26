@@ -100,7 +100,7 @@ if __name__ == '__main__':
 		doneurls = savestatus['doneurls'] = []
 
 	rooturl = None
-
+	goon = False
 	if len(sys.argv) > 1:
 		url = sys.argv[1]
 		if (url not in urls and url not in doneurls) or (len(sys.argv)>2 and sys.argv[2]=='new'):
@@ -109,6 +109,8 @@ if __name__ == '__main__':
 			del doneurls[:]
 			urls.append(url)
 			rooturl = url
+		if len(sys.argv)>3 and sys.argv[3]=='goon':
+			goon = True
 	else:
 		print 'usage: python HtmlDiagnose.py url [new]'
 		exit()
@@ -121,7 +123,7 @@ if __name__ == '__main__':
 	try:
 		while urls:
 			url = urls.pop()
-			if url not in doneurls and url:
+			if url and url not in doneurls and url.startswith('http'):
 				print '%s'%url
 				html = getHtmlOfUrl(url)
 				if not html:
@@ -130,12 +132,16 @@ if __name__ == '__main__':
 				doneurls.append(url)
 				for u in getAllLinks(url, html):
 					if rooturl in u and u not in urls and u not in doneurls:
-						urls.append(u)
+						if '#' in u:
+							urls.append(u[0:u.index('#')])
+						else:
+							urls.append(u)
 				err = getErrorTag(html)
 				if err:
 					# print '\t%s'%err
 					sys.stderr.write('%s in %s\n'%(err, url))
-					break
+					if not goon:
+						break
 		print 'finish!'
 	except Exception, e:
 		print e

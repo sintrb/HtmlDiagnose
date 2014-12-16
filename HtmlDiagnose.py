@@ -12,18 +12,21 @@ import sys
 import re
 
 class HTMLSyntax(HTMLParser):
+	'''
+	HTML文档解析器
+	'''
 	def __init__(self):
 		HTMLParser.__init__(self)
 		self.error = None
 		self.stack = []
+
+		# 忽略的标签，这些标签不需要配对
 		self.singleline = ['input', 'br', 'meta', 'link', 'img', 'base']
-	def toptag():
-		if self.stack:
-			return self.stack.pop()
-		else:
-			return None
 
 	def handle_starttag(self, tag, attrs):
+		'''
+		处理标签起始
+		'''
 		if self.error:
 			return
 		if tag not in self.singleline:
@@ -36,6 +39,9 @@ class HTMLSyntax(HTMLParser):
 			})
 			
 	def handle_endtag(self, tag):
+		'''
+		处理标签结束
+		'''
 		if self.error:
 			return
 		if tag not in self.singleline:
@@ -53,11 +59,17 @@ class HTMLSyntax(HTMLParser):
 		return self.error
 
 def getErrorTag(html):
+	'''
+	判断该html格式是否正确，正确返回None，否则返回错误描述
+	'''
 	syt =HTMLSyntax()
 	syt.feed(html)
 	return syt.getError()
 
 def getAllLinks(path, html):
+	'''
+	获取HTML文档中的所有A标签链接
+	'''
 	links = []
 	for h in re.findall(r'<a [^/]*href="([^"]+)"', html):
 		url = urljoin(path,  h).replace('/../', '/')
@@ -67,6 +79,9 @@ def getAllLinks(path, html):
 
 
 def getHtmlOfUrl(url):
+	'''
+	获取url对应的html文档，根据需要替换该方法
+	'''
 	html = urllib2.urlopen(url).read()
 	try:
 		html = html.decode('utf-8')
@@ -79,7 +94,7 @@ def getHtmlOfUrl(url):
 
 
 if __name__ == '__main__':
-	import pickle
+	import pickle	# 用于状态持久化
 
 	savestatus = {}
 	try:
@@ -112,7 +127,7 @@ if __name__ == '__main__':
 		if len(sys.argv)>3 and sys.argv[3]=='goon':
 			goon = True
 	else:
-		print 'usage: python HtmlDiagnose.py url [new]'
+		print 'usage: python HtmlDiagnose.py url [new] [goon]'
 		exit()
 
 	if not rooturl and 'rooturl' in savestatus:

@@ -142,8 +142,8 @@ if __name__ == '__main__':
 				print '%s'%url
 				html = getHtmlOfUrl(url)
 				if not html:
-					print '\tno html content'
-					break
+					# print '\tno html content'
+					continue
 				doneurls.append(url)
 				for u in getAllLinks(url, html):
 					if rooturl in u and u not in urls and u not in doneurls:

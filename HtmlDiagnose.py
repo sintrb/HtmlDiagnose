@@ -115,19 +115,22 @@ if __name__ == '__main__':
 		doneurls = savestatus['doneurls'] = []
 
 	rooturl = None
-	goon = False
-	if len(sys.argv) > 1:
-		url = sys.argv[1]
-		if (url not in urls and url not in doneurls) or (len(sys.argv)>2 and sys.argv[2]=='new'):
-			print 'new for %s'%url
-			del urls[:]
-			del doneurls[:]
-			urls.append(url)
-			rooturl = url
-		if len(sys.argv)>3 and sys.argv[3]=='goon':
-			goon = True
-	else:
-		print 'usage: python HtmlDiagnose.py url [new] [goon]'
+	isnew = 'new' in sys.argv
+	goon = 'goon' in sys.argv
+	withlast = 'last' in sys.argv
+	if withlast and doneurls:
+		urls.append(doneurls.pop())
+	if isnew:
+		del urls[:]
+		del doneurls[:]
+
+	for arg in  sys.argv[1:]:
+		if arg.startswith('http://') or arg.startswith('https://'):
+			urls.append(arg)
+
+	if not urls:
+		print 'not url to fetch'
+		print 'usage: python HtmlDiagnose.py [new] [goon] url1 url2 ...'
 		exit()
 
 	if not rooturl and 'rooturl' in savestatus:
@@ -135,28 +138,41 @@ if __name__ == '__main__':
 	else:
 		savestatus['rooturl'] = rooturl
 
+	def printerr(e, url, preurl):
+		if not preurl:
+			sys.stderr.write(u' %s in %s\n'%(e, url))
+		else:
+			sys.stderr.write(u' %s in %s (from %s)\n'%(e, url, preurl))
+		if not goon:
+			with open('savestatus', 'w+') as f:
+				pickle.dump(savestatus, f)
+			exit()
 	try:
 		while urls:
 			url = urls.pop()
+			preurl = None
+			if type(url) == tuple:
+				url, preurl = url
 			if url and url not in doneurls and url.startswith('http'):
 				print '%s'%url
-				html = getHtmlOfUrl(url)
+				html = None
+				try:
+					html = getHtmlOfUrl(url)
+				except Exception, e:
+					printerr(e, url, preurl)
 				if not html:
-					# print '\tno html content'
 					continue
 				doneurls.append(url)
 				for u in getAllLinks(url, html):
 					if rooturl in u and u not in urls and u not in doneurls:
+						nurl = u
 						if '#' in u:
-							urls.append(u[0:u.index('#')])
-						else:
-							urls.append(u)
+							nurl = u[0:u.index('#')]
+						urls.append((nurl, url))
 				err = getErrorTag(html)
 				if err:
-					# print '\t%s'%err
-					sys.stderr.write('%s in %s\n'%(err, url))
-					if not goon:
-						break
+					printerr(err, url, preurl)
+
 		print 'finish!'
 	except Exception, e:
 		print e

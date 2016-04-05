@@ -82,15 +82,24 @@ def getHtmlOfUrl(url):
 	'''
 	获取url对应的html文档，根据需要替换该方法
 	'''
-	html = urllib2.urlopen(url).read()
 	try:
-		html = html.decode('utf-8')
+		# use requests
+		import requests
+		return requests.get(url).text
 	except:
+		pass
+	try:
+		html = urllib2.urlopen(url).read()
 		try:
-			html = html.decode('gbk')
+			html = html.decode('utf-8')
 		except:
-			html = None
-	return html
+			try:
+				html = html.decode('gbk')
+			except:
+				html = None
+		return html
+	except:
+		return None
 
 
 if __name__ == '__main__':

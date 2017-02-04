@@ -7,7 +7,6 @@
 
 from HTMLParser import HTMLParser
 from urlparse import urljoin
-import urllib2
 import sys
 import re
 
@@ -80,42 +79,52 @@ def getAllLinks(path, html):
 	return links
 
 
-def getHtmlOfUrl(url):
+def getHtmlOfUrl(url, **kwargs):
 	'''
 	获取url对应的html文档，根据需要替换该方法
 	'''
 	import requests
-	x = requests.get(url).text
-# 	print x
-	return x
-	try:
-		# use requests
-		return requests.get(url).text
-	except:
-		pass
-	try:
-		html = urllib2.urlopen(url).read()
-		try:
-			html = html.decode('utf-8')
-		except:
-			try:
-				html = html.decode('gbk')
-			except:
-				html = None
-		return html
-	except:
-		return None
+	res = requests.get(url, **kwargs)
+	if res.status_code > 400:
+		raise Exception(res.status_code)
+	return res.text
 
 def main():
 	import pickle  # 用于状态持久化
-
+	from optparse import OptionParser
+	parser = OptionParser(usage='usage: %prog [options] url1 [url2 ...]')
+	
+	parser.add_option("-s", "--statefile",
+	                action="store",
+	                dest='state',
+	                default='',
+	                help="state file to save fetch state"  
+	            	)
+	parser.add_option("--header",
+	                action="append",
+	                dest='headers',
+	                default=[],
+	                help="http request headers"  
+	            	)
+	parser.add_option("-n", "--new",
+	                action="store_true",
+	                dest='isnew',
+	                default=False,
+	                help="fetch with new state"
+	                )
+	parser.add_option("-g", "--goon",
+	                action="store_true",
+	                dest='isgoon',
+	                default=False,
+	                help="go on when find error"
+	                )
+	
+	(options, args) = parser.parse_args()
+	
 	savestatus = {}
-	try:
-		with open('savestatus', 'r+') as f:
+	if options.state and not options.isnew:
+		with open(options.state, 'r+') as f:
 			savestatus = pickle.load(f)
-	except:
-		# print 'load failed'
-		pass
 
 	if 'urls' in savestatus:
 		urls = savestatus['urls']
@@ -127,8 +136,8 @@ def main():
 	else:
 		doneurls = savestatus['doneurls'] = []
 
-	isnew = 'new' in sys.argv
-	goon = 'goon' in sys.argv
+	isnew = options.isnew
+	goon = options.isgoon
 	withlast = 'last' in sys.argv
 	if withlast and doneurls:
 		urls.append(doneurls.pop())
@@ -136,13 +145,12 @@ def main():
 		del urls[:]
 		del doneurls[:]
 
-	for arg in sys.argv[1:]:
+	for arg in args:
 		if arg.startswith('http://') or arg.startswith('https://'):
 			urls.append(arg)
 
 	if not urls:
-		print 'not url to fetch'
-		print 'usage: python HtmlDiagnose.py [new] [goon] url1 url2 ...'
+		print parser.format_help()
 		exit()
 	
 	url = urls[0]
@@ -156,38 +164,55 @@ def main():
 		else:
 			sys.stderr.write(u' %s in %s (from %s)\n' % (e, url, preurl))
 		if not goon:
-			with open('savestatus', 'w+') as f:
-				pickle.dump(savestatus, f)
-			exit()
-	while urls:
-		url = urls.pop()
-		preurl = None
-		if type(url) == tuple:
-			url, preurl = url
-		if url and url not in doneurls and url.startswith('http'):
-			print '%s' % url
-			html = None
-			html = getHtmlOfUrl(url)
-			try:
-				html = getHtmlOfUrl(url)
-			except Exception, e:
-				printerr(e, url, preurl)
-			if not html:
-				continue
-			doneurls.append(url)
-			for u in getAllLinks(url, html):
-				if rooturl in u and u not in urls and u not in doneurls:
-					nurl = u
-					if '#' in u:
-						nurl = u[0:u.index('#')]
-					urls.append((nurl, url))
-			err = getErrorTag(html)
-			if err:
-				printerr(err, url, preurl)
-	print 'finish!'
+			raise Exception(u'Exit with exception')
+	
+	reqkwargs = {
+			'headers':[]
+		}
+	if options.headers:
+		headers = {}
+		for h in options.headers:
+			ix = h.index(':')
+			if ix > 0:
+				headers[h[0:ix].strip()] = h[ix + 1:].strip()
+		if headers:
+			reqkwargs['headers'] = headers
+	try:
+		while urls:
+			url = urls.pop()
+			preurl = None
+			if type(url) == tuple:
+				url, preurl = url
+			if url and url not in doneurls and url.startswith('http'):
+				print('%s' % url)
+				html = None
+# 				html = getHtmlOfUrl(url, **reqkwargs)
+				try:
+					html = getHtmlOfUrl(url, **reqkwargs)
+				except Exception, e:
+					printerr(e, url, preurl)
+				if not html:
+					continue
+				doneurls.append(url)
+				for u in getAllLinks(url, html):
+					if rooturl in u and u not in urls and u not in doneurls:
+						nurl = u
+						if '#' in u:
+							nurl = u[0:u.index('#')]
+						urls.append((nurl, url))
+				err = getErrorTag(html)
+				if err:
+					printerr(err, url, preurl)
+		print('finish!')
+	except Exception, e:
+		print(e)
+	except KeyboardInterrupt, e:
+		print('user exit!')
+		pass
 
-	with open('savestatus', 'w+') as f:
-		pickle.dump(savestatus, f)
+	if options.state:
+		with open(options.state, 'w+') as f:
+			pickle.dump(savestatus, f)
 
 
 if __name__ == '__main__':

@@ -16,7 +16,7 @@ except:
     from HTMLParser import HTMLParser
     from urlparse import urljoin
 
-__version__ = "1.0.0"
+__version__ = "1.0.2"
 __description__ = "A web page HTML format diagnoser."
 
 
@@ -84,8 +84,13 @@ def getAllLinks(path, html):
     获取HTML文档中的所有A标签链接
     '''
     links = []
-    for h in re.findall(r'<a [^/]*href="([^"]+)"', html):
-        url = urljoin(path, h).replace('/../', '/')
+    for h in re.findall(r'<a [^/]*href=["\']([^\s^\'^"]+)["\']', html):
+        if h.startswith('tel:'):
+            continue
+        elif '://' not in h:
+            url = urljoin(path, h).replace('/../', '/')
+        else:
+            url = h
         if url not in links:
             links.append(url)
     return links
@@ -99,6 +104,8 @@ def getHtmlOfUrl(url, **kwargs):
     res = requests.get(url, **kwargs)
     if res.status_code > 400:
         raise Exception(res.status_code)
+    if res.cookies and 'cookies' in kwargs and type(kwargs['cookies']) == dict:
+        kwargs['cookies'].update(res.cookies.get_dict())
     return res.text
 
 
@@ -119,6 +126,24 @@ def main():
                       default=[],
                       help="set http request headers, like 'curl -H'",
                       )
+    parser.add_option("-r", "--ignore",
+                      action="append",
+                      dest='ignores',
+                      default=[],
+                      help="add ignore url param, exp: -i 'random'",
+                      )
+    parser.add_option("-e", "--exclude",
+                      action="append",
+                      dest='excludes',
+                      default=[],
+                      help="exclude url pattern",
+                      )
+    parser.add_option("-i", "--include",
+                      action="append",
+                      dest='includes',
+                      default=[],
+                      help="include url pattern",
+                      )
     parser.add_option("-n", "--new",
                       action="store_true",
                       dest='isnew',
@@ -136,22 +161,25 @@ def main():
 
     savestatus = {}
     if options.state and not options.isnew:
-        with open(options.state, 'r+') as f:
+        with open(options.state, 'rb') as f:
             savestatus = pickle.load(f)
 
-    if 'urls' in savestatus:
-        urls = savestatus['urls']
-    else:
-        urls = savestatus['urls'] = []
-
-    if 'doneurls' in savestatus:
-        doneurls = savestatus['doneurls']
-    else:
-        doneurls = savestatus['doneurls'] = []
+    savestatus.setdefault('urls', [])
+    savestatus.setdefault('doneurls', [])
+    savestatus.setdefault('ignoreurls', [])
+    savestatus.setdefault('exc', [])
+    savestatus.setdefault('counter', 0)
+    urls = savestatus['urls']
+    doneurls = savestatus['doneurls']
+    ignoreurls = savestatus['ignoreurls']
+    counter = savestatus['counter']
+    ignores = options.ignores
 
     isnew = options.isnew
     goon = options.isgoon
     withlast = 'last' in sys.argv
+    savestatus.setdefault('cookies', {})
+    cookies = savestatus['cookies']
     if withlast and doneurls:
         urls.append(doneurls.pop())
     if isnew:
@@ -187,18 +215,27 @@ def main():
         for h in options.headers:
             ix = h.index(':')
             if ix > 0:
-                headers[h[0:ix].strip()] = h[ix + 1:].strip()
+                key = h[0:ix].strip()
+                val = h[ix + 1:].strip()
+                if key.lower() == 'cookie':
+                    # Cookie
+                    rs = re.findall('([^;]+)=([^;]*)', val, re.MULTILINE | re.IGNORECASE) or []
+                    for k, v in rs:
+                        cookies[k] = v
+                else:
+                    headers[key] = val
         if headers:
             reqkwargs['headers'] = headers
-            print(headers)
     try:
+        reqkwargs['cookies'] = cookies
         while urls:
+            counter += 1
             url = urls.pop()
             preurl = None
             if type(url) == tuple:
                 url, preurl = url
             if url and url not in doneurls and url.startswith('http'):
-                print('fetching %s ...' % url)
+                print('fetching %5d %s ...' % (counter, url))
                 html = None
                 # 				html = getHtmlOfUrl(url, **reqkwargs)
                 try:
@@ -209,6 +246,36 @@ def main():
                     continue
                 doneurls.append(url)
                 for u in getAllLinks(url, html):
+                    if ignores and '?' in u:
+                        ix = u.index('?')
+                        u1 = u[0:ix]
+                        u2 = re.sub('#.*', '', u[ix:])
+                        for ic in ignores:
+                            u2 = re.sub(r'[\?&]%s=[^&]*' % ic, '', u2)
+                        u2 = u2.strip('&?')
+                        iu = (u1 + '?' + u2) if u2 else u1
+                        if iu in ignoreurls:
+                            continue
+                        ignoreurls.append(iu)
+                    if options.excludes:
+                        found = False
+                        for p in options.excludes:
+                            if re.match(p, u):
+                                found = True
+                                break
+                        if found:
+                            # print('exclude', u)
+                            continue
+                            # print(u, '->', iu)
+                    if options.includes:
+                        found = False
+                        for p in options.includes:
+                            if re.match(p, u):
+                                found = True
+                                break
+                        if not found:
+                            # print('not include', u)
+                            continue
                     if rooturl in u and u not in urls and u not in doneurls:
                         nurl = u
                         if '#' in u:
@@ -219,11 +286,13 @@ def main():
                     printerr(err, url, preurl)
         print('finish!')
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(e)
     except KeyboardInterrupt as e:
         print('user exit!')
         pass
-
+    savestatus['counter'] = counter
     if options.state:
         with open(options.state, 'wb+') as f:
             pickle.dump(savestatus, f)

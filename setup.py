@@ -1,27 +1,24 @@
 # -*- coding: utf-8 -*-
-import os, io
 from setuptools import setup
+import os, io
 
-from HtmlDiagnose.HtmlDiagnose import __version__
+from HtmlDiagnose.HtmlDiagnose import __version__, __description__
+
 here = os.path.abspath(os.path.dirname(__file__))
-README = io.open(os.path.join(here, 'README.rst'), encoding='UTF-8').read()
-CHANGES = io.open(os.path.join(here, 'CHANGES.rst'), encoding='UTF-8').read()
+README = io.open(os.path.join(here, 'README.md'), encoding='UTF-8').read()
+CHANGES = io.open(os.path.join(here, 'CHANGES.md'), encoding='UTF-8').read()
 setup(name='HtmlDiagnose',
       version=__version__,
-      description='A weeb page HTML format diagnoser.',
+      description=__description__,
       long_description=README + '\n\n\n' + CHANGES,
+      long_description_content_type="text/markdown",
       url='https://github.com/sintrb/HtmlDiagnose',
-      classifiers=[
-          'Intended Audience :: Developers',
-          'Operating System :: OS Independent',
-          'Programming Language :: Python :: 2.7',
-          'Topic :: Text Editors',
-      ],
-      keywords='HtmlDiagnose HTML',
+      keywords=('HtmlDiagnose', 'HTML', 'Web'),
       author='sintrb',
       author_email='sintrb@gmail.com',
       license='Apache',
       packages=['HtmlDiagnose'],
-      scripts=['HtmlDiagnose/HtmlDiagnose', 'HtmlDiagnose/HtmlDiagnose.bat'],
+      scripts=[],
+      install_requires=['requests'],
       include_package_data=True,
       zip_safe=False)

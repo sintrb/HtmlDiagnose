@@ -3,14 +3,14 @@
 # @Date	: 2014-11-26 15:34:50
 # @Author  : RobinTang
 # @Link	: https://github.com/sintrb/HtmlDiagnose
-# @Version : 1.0
+# @Version : 0.0.2
 
 from HTMLParser import HTMLParser
 from urlparse import urljoin
 import sys
 import re
 
-__version__ = "0.0.1" 
+__version__ = "0.0.2" 
 
 class HTMLSyntax(HTMLParser):
 	'''

@@ -16,7 +16,7 @@ except:
     from HTMLParser import HTMLParser
     from urlparse import urljoin
 
-__version__ = "1.0.2"
+__version__ = "1.0.3"
 __description__ = "A web page HTML format diagnoser."
 
 
@@ -229,12 +229,12 @@ def main():
     try:
         reqkwargs['cookies'] = cookies
         while urls:
-            counter += 1
             url = urls.pop()
             preurl = None
             if type(url) == tuple:
                 url, preurl = url
             if url and url not in doneurls and url.startswith('http'):
+                counter += 1
                 print('fetching %5d %s ...' % (counter, url))
                 html = None
                 # 				html = getHtmlOfUrl(url, **reqkwargs)
